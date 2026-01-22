@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Travel Master V5.2 | 公版精靈 (已修復)</title>
+    <title>Travel Master V5.1 | 公版精靈</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -29,14 +29,15 @@
         #map-container { height: 280px; width: 100%; border-radius: 1.5rem; overflow: hidden; z-index: 0; box-shadow: inset 0 0 20px rgba(0,0,0,0.1); }
         .leaflet-popup-content-wrapper { border-radius: 12px; font-family: 'Zen Maru Gothic'; }
         
-        /* 🔴 防閃爍：在 Vue 載入前隱藏內容 */
+        /* 🔴 防閃爍機制 */
         [v-cloak] { display: none !important; }
         
+        /* Wizard Background */
         .wizard-bg { background: linear-gradient(135deg, #4E9F9F 0%, #3A7A7A 100%); }
+
         @media print {
             .app-container { max-width: 100%; padding-bottom: 0; }
             .no-print, #map-container, nav { display: none !important; }
-            .print-only { display: block !important; }
         }
     </style>
 </head>
@@ -111,12 +112,11 @@
 
                 <div class="flex justify-between items-end mb-4 px-2">
                     <div>
-                        <div class="text-xs text-gray-400 mb-1">今日重點區域 (點擊編輯)</div>
+                        <div class="text-xs text-gray-400 mb-1">今日重點區域</div>
                         <div class="flex items-center gap-2">
                              <input v-model="currentDay.location" class="text-2xl font-bold text-gray-800 bg-transparent border-b border-transparent focus:border-lake focus:outline-none w-40" @change="fetchWeather">
                              <i class="fas fa-pen text-xs text-gray-300"></i>
                         </div>
-                        <div class="text-xs text-gray-400 mt-1">住宿: <span @click="editHotel" class="text-gray-600 underline decoration-dotted cursor-pointer">{{ currentDay.hotel || '未設定' }}</span></div>
                     </div>
                     <div class="text-right">
                         <div class="flex items-center gap-2 text-lake">
@@ -148,7 +148,7 @@
         </div>
 
         <div v-show="currentTab === 'money'" class="px-5 pt-6 pb-24">
-            <h2 class="text-2xl font-bold text-lake mb-4">匯率分帳 ({{ meta.currency }})</h2>
+            <h2 class="text-2xl font-bold text-lake mb-4">智慧分帳 ({{ meta.currency }})</h2>
             <div class="bg-white p-4 rounded-2xl shadow-soft mb-6 flex justify-between items-center">
                 <div>
                     <div class="text-xs text-gray-400">即時匯率 (1 {{ meta.currency }} = TWD)</div>
@@ -222,6 +222,7 @@
         appId: "1:1073394061780:web:bc17f72b576a77094b0641"
     };
 
+    // Initialize Firebase (Error Handling)
     let app, db, dbTripRef;
     try {
         app = initializeApp(firebaseConfig);
@@ -229,10 +230,10 @@
         const tripId = "shared_trip_v5_public"; 
         dbTripRef = dbRef(db, 'trips/' + tripId);
     } catch (e) {
-        console.error("Firebase 初始化失敗", e);
+        console.error("Firebase 初始化失敗，請檢查 Config", e);
     }
 
-    // 🌍 WORLD DATABASE
+    // 🌍 WORLD DATABASE (智慧偵測邏輯)
     const worldDB = {
         'default': { curr: 'USD', sym: '$', lang: 'en', lat: 40.71, lon: -74.00 },
         'tokyo': { curr: 'JPY', sym: '¥', lang: 'ja', lat: 35.68, lon: 139.76 },
@@ -249,6 +250,7 @@
 
     createApp({
         setup() {
+            // UI State
             const showWizard = ref(true);
             const currentTab = ref('itinerary');
             const selectedDayIdx = ref(0);
@@ -256,27 +258,32 @@
             const mapLoading = ref(false);
             const loadingError = ref('');
             
+            // Map
             let map = null;
             let markers = [];
             let userMarker = null;
 
+            // Data Models
             const setupData = ref({ destination: '', startDate: '' });
             const meta = ref({ destination: '', currency: 'JPY', symbol: '¥', lang: 'ja' }); 
             const itinerary = ref([]);
             const expenses = ref([]);
             const checklist = ref([{text: '護照', checked: false}, {text: '網卡', checked: false}]);
+            
+            // Currency & Money
             const exchangeRateDecimal = ref(1); 
             const rateLoading = ref(false);
             const peopleCount = ref(2);
             const newExpense = ref({ amount: '', desc: '', payer: '我' });
-            const newItem = ref('');
+            
+            // Weather
             const currentWeather = ref({ temp: '--', code: 0 });
 
             // Computed
             const currentDay = computed(() => itinerary.value[selectedDayIdx.value] || { location: '...', events: [] });
             const totalTwd = computed(() => expenses.value.reduce((sum, item) => sum + Math.round(item.amount * item.rate), 0));
 
-            // Wizard
+            // --- WIZARD LOGIC ---
             const detectContext = (city) => {
                 const key = city.toLowerCase().trim();
                 const match = Object.keys(worldDB).find(k => key.includes(k));
@@ -285,24 +292,47 @@
 
             const initializeTrip = () => {
                 const context = detectContext(setupData.value.destination);
-                meta.value = { destination: setupData.value.destination, currency: context.curr, symbol: context.sym, lang: context.lang };
+                
+                meta.value = {
+                    destination: setupData.value.destination,
+                    currency: context.curr,
+                    symbol: context.sym,
+                    lang: context.lang
+                };
+
                 itinerary.value = [{
                     location: setupData.value.destination,
                     hotel: '',
-                    events: [{ time: '10:00', title: '抵達 ' + setupData.value.destination, desc: '旅程開始！', lat: context.lat, lon: context.lon }]
+                    events: [{ 
+                        time: '10:00', 
+                        title: '抵達 ' + setupData.value.destination, 
+                        desc: '旅程開始！', 
+                        lat: context.lat, 
+                        lon: context.lon 
+                    }]
                 }];
+                
                 showWizard.value = false;
                 saveToCloud();
                 
+                // 🔴 安全修正：確保 DOM 更新後才初始化地圖
                 nextTick(() => {
-                    setTimeout(() => { updateRate(); initMap(); fetchWeather(); }, 100);
+                    setTimeout(() => {
+                        updateRate();
+                        initMap(); // 這時候 map-container 一定存在了
+                        fetchWeather();
+                    }, 100);
                 });
             };
 
-            // Sync
+            // --- SYNC ---
             let isRemoteUpdate = false;
             const initSync = () => {
-                if(!dbTripRef) { loadingError.value = "Firebase Config Error"; return; }
+                if(!dbTripRef) {
+                    loadingError.value = "Firebase 設定未填寫或錯誤";
+                    return;
+                }
+
                 onValue(dbTripRef, (snapshot) => {
                     const data = snapshot.val();
                     isRemoteUpdate = true;
@@ -314,6 +344,8 @@
                         checklist.value = data.checklist || [];
                         exchangeRateDecimal.value = data.exchangeRateDecimal || 1;
                         syncStatus.value = '已同步';
+                        
+                        // 🔴 安全修正：檢查地圖容器是否存在
                         nextTick(() => {
                             if(currentTab.value === 'itinerary' && !showWizard.value) {
                                 if(!map) initMap(); else updateMarkers();
@@ -327,57 +359,30 @@
                 }, (err) => {
                     console.error(err);
                     syncStatus.value = '連線失敗';
-                    loadingError.value = "連線失敗: 檢查 Config";
+                    loadingError.value = "連線失敗: 請檢查 Firebase Config";
                 });
             };
 
             const saveToCloud = () => {
                 if (isRemoteUpdate || showWizard.value || !dbTripRef) return; 
                 syncStatus.value = '儲存中...';
-                set(dbTripRef, { meta: meta.value, itinerary: itinerary.value, expenses: expenses.value, checklist: checklist.value, exchangeRateDecimal: exchangeRateDecimal.value })
-                .then(() => syncStatus.value = '已同步').catch(()=> syncStatus.value = '儲存失敗');
+                set(dbTripRef, {
+                    meta: meta.value,
+                    itinerary: itinerary.value,
+                    expenses: expenses.value,
+                    checklist: checklist.value,
+                    exchangeRateDecimal: exchangeRateDecimal.value
+                }).then(() => syncStatus.value = '已同步').catch(()=> syncStatus.value = '儲存失敗');
             };
 
             watch([itinerary, expenses, checklist, exchangeRateDecimal, meta], () => saveToCloud(), { deep: true });
 
-            // Actions (🔴 修正處)
-            const addDay = () => itinerary.value.push({ location: 'New Place', events: [] });
-            
-            // 🔴 修正：直接操作 itinerary 陣列，確保有地方可以 push
-            const addEvent = () => {
-                const day = itinerary.value[selectedDayIdx.value];
-                if(day) {
-                    if(!Array.isArray(day.events)) day.events = []; // 防呆：如果沒有陣列就創一個
-                    day.events.push({ time: '12:00', title: '新行程', desc: '編輯我', lat: null, lon: null });
-                }
-            };
-
-            const editEvent = (idx) => {
-                // 🔴 修正：改用直接索引存取
-                const ev = itinerary.value[selectedDayIdx.value].events[idx];
-                const t = prompt("Time", ev.time); if(t) ev.time = t;
-                const title = prompt("Title", ev.title); if(title) ev.title = title;
-                const d = prompt("Desc", ev.desc); if(d) ev.desc = d;
-            };
-
-            const deleteEvent = (idx) => {
-                if(confirm('Delete?')) {
-                    // 🔴 修正：改用直接索引存取
-                    itinerary.value[selectedDayIdx.value].events.splice(idx, 1);
-                    updateMarkers();
-                }
-            };
-
-            const editHotel = () => { 
-                const day = itinerary.value[selectedDayIdx.value];
-                const h = prompt('住宿', day.hotel); 
-                if(h!==null) day.hotel = h; 
-            };
-
-            // Helpers
+            // --- FEATURES ---
             const initMap = () => {
+                // 🔴 安全修正：如果地圖容器不存在，直接跳過，防止報錯
                 if(!document.getElementById('map-container')) return;
                 if(map) return;
+                
                 const firstLoc = itinerary.value[0]?.events?.find(e=>e.lat) || {lat: 35.68, lon: 139.76};
                 map = L.map('map-container', { zoomControl: false }).setView([firstLoc.lat, firstLoc.lon], 13);
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: 'OSM', maxZoom: 19 }).addTo(map);
@@ -388,8 +393,7 @@
                 if(!map) return;
                 markers.forEach(m => map.removeLayer(m));
                 markers = [];
-                const dayEvents = itinerary.value[selectedDayIdx.value]?.events || [];
-                const events = dayEvents.filter(e => e.lat && e.lon);
+                const events = currentDay.value.events ? currentDay.value.events.filter(e => e.lat && e.lon) : [];
                 if(events.length === 0) return;
                 const bounds = L.latLngBounds();
                 events.forEach(e => {
@@ -410,21 +414,46 @@
             };
 
             const getTranslateLink = () => `https://translate.google.com/?sl=${meta.value.lang}&tl=zh-TW&op=translate`;
-            const addExpense = () => { if(newExpense.value.amount) { expenses.value.unshift({ amount: newExpense.value.amount, desc: newExpense.value.desc || 'General', payer: newExpense.value.payer, rate: exchangeRateDecimal.value }); newExpense.value.amount = ''; newExpense.value.desc = ''; }};
+
+            const addDay = () => itinerary.value.push({ location: 'New Place', events: [] });
+            const addEvent = () => currentDay.value.events.push({ time: '12:00', title: 'New Event', desc: '...', lat: null, lon: null });
+            const editEvent = (idx) => {
+                const ev = currentDay.value.events[idx];
+                const t = prompt("Time", ev.time); if(t) ev.time = t;
+                const title = prompt("Title", ev.title); if(title) ev.title = title;
+                const d = prompt("Desc", ev.desc); if(d) ev.desc = d;
+            };
+            const deleteEvent = (idx) => confirm('Delete?') && currentDay.value.events.splice(idx, 1);
+            const addExpense = () => {
+                if(newExpense.value.amount) {
+                    expenses.value.unshift({ 
+                        amount: newExpense.value.amount, 
+                        desc: newExpense.value.desc || 'General', 
+                        payer: newExpense.value.payer, 
+                        rate: exchangeRateDecimal.value 
+                    });
+                    newExpense.value.amount = ''; newExpense.value.desc = '';
+                }
+            };
             const removeExpense = (i) => expenses.value.splice(i, 1);
             const addChecklist = () => { if(newItem.value) { checklist.value.push({text:newItem.value, checked:false}); newItem.value=''; }};
             const removeChecklist = (i) => checklist.value.splice(i, 1);
             
             const switchTab = (tab) => { 
                 currentTab.value = tab; 
-                if(tab === 'itinerary') nextTick(() => { if(document.getElementById('map-container')) { if(map) map.invalidateSize(); else initMap(); }}); 
+                if(tab === 'itinerary') {
+                    // 🔴 安全修正：切換 Tab 時也要檢查 DOM 狀態
+                    nextTick(() => { 
+                        if(document.getElementById('map-container')) {
+                            if(map) map.invalidateSize(); else initMap(); 
+                        }
+                    }); 
+                }
             };
             
             const selectDay = (idx) => { selectedDayIdx.value = idx; updateMarkers(); fetchWeather(); };
-            
             const fetchWeather = async () => {
-                const dayEvents = itinerary.value[selectedDayIdx.value]?.events || [];
-                const ev = dayEvents.find(e => e.lat);
+                const ev = currentDay.value.events?.find(e => e.lat);
                 if(ev) {
                     try {
                         const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${ev.lat}&longitude=${ev.lon}&current_weather=true`);
@@ -438,12 +467,14 @@
             const locateMe = () => { navigator.geolocation.getCurrentPosition(p => { if(map) map.flyTo([p.coords.latitude, p.coords.longitude], 15); }) };
             const printManual = () => window.print();
 
-            onMounted(() => { initSync(); });
+            onMounted(() => {
+                initSync();
+            });
 
             return {
                 showWizard, setupData, meta, initializeTrip, loadingError,
                 currentTab, selectedDayIdx, currentDay, itinerary, expenses, checklist, newItem, exchangeRateDecimal, newExpense, totalTwd, peopleCount, rateLoading, currentWeather, mapLoading, syncStatus,
-                switchTab, selectDay, locateMe, updateRate, addExpense, removeExpense, addChecklist, removeChecklist, printManual, focusOnMap, getWeatherIcon, addDay, addEvent, editEvent, deleteEvent, getTranslateLink, editHotel
+                switchTab, selectDay, locateMe, updateRate, addExpense, removeExpense, addChecklist, removeChecklist, printManual, focusOnMap, getWeatherIcon, addDay, addEvent, editEvent, deleteEvent, getTranslateLink
             };
         }
     }).mount('#app');
