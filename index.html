@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Travel Master V5.1 | 公版精靈</title>
+    <title>九州旅記 V4 | 雲端同步版</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -28,63 +28,25 @@
         .app-container { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #F9F7F2; position: relative; padding-bottom: 100px; }
         #map-container { height: 280px; width: 100%; border-radius: 1.5rem; overflow: hidden; z-index: 0; box-shadow: inset 0 0 20px rgba(0,0,0,0.1); }
         .leaflet-popup-content-wrapper { border-radius: 12px; font-family: 'Zen Maru Gothic'; }
-        
-        /* 🔴 防閃爍機制 */
-        [v-cloak] { display: none !important; }
-        
-        /* Wizard Background */
-        .wizard-bg { background: linear-gradient(135deg, #4E9F9F 0%, #3A7A7A 100%); }
-
+        .leaflet-popup-content { font-size: 14px; font-weight: bold; color: #4E9F9F; margin: 12px; }
         @media print {
             .app-container { max-width: 100%; padding-bottom: 0; }
             .no-print, #map-container, nav { display: none !important; }
+            .print-only { display: block !important; }
         }
     </style>
 </head>
 <body>
 
-<div id="app" v-cloak>
-    
-    <div v-if="showWizard" class="fixed inset-0 z-50 wizard-bg flex items-center justify-center p-6 text-white">
-        <div class="bg-white/10 backdrop-blur-md p-8 rounded-3xl w-full max-w-sm shadow-2xl border border-white/20">
-            <div class="text-center mb-8">
-                <i class="fas fa-plane-departure text-4xl mb-4 text-white/90"></i>
-                <h1 class="text-2xl font-bold">開啟新旅程</h1>
-                <p class="text-white/70 text-sm mt-2">輸入目的地，自動配置匯率與地圖</p>
-                <p v-if="loadingError" class="text-red-300 text-xs mt-2 bg-red-900/30 p-2 rounded">{{ loadingError }}</p>
-            </div>
-            
-            <div class="space-y-4">
-                <div>
-                    <label class="text-xs font-bold text-lakeLight uppercase tracking-wider">目的地 (城市名)</label>
-                    <input v-model="setupData.destination" placeholder="例: Tokyo, London, Seoul" class="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-white/50 transition">
-                    <p class="text-[10px] text-white/50 mt-1 pl-1">支援英文或中文城市名自動偵測</p>
-                </div>
-                <div>
-                    <label class="text-xs font-bold text-lakeLight uppercase tracking-wider">出發日期</label>
-                    <input type="date" v-model="setupData.startDate" class="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/50">
-                </div>
-                <button @click="initializeTrip" :disabled="!setupData.destination" class="w-full bg-white text-lakeDark font-bold py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed mt-4">
-                    開始規劃 🚀
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div v-else class="app-container">
+<div id="app">
+    <div class="app-container">
         
         <header class="bg-white/80 backdrop-blur-md sticky top-0 z-30 px-6 py-4 flex justify-between items-center border-b border-gray-100/50">
             <div class="flex flex-col">
-                <h1 class="text-xl font-bold text-lake tracking-wide truncate max-w-[150px]">
-                    <i class="fas fa-map-marked-alt mr-2"></i>{{ meta.destination || 'My Trip' }}
-                </h1>
-                <div class="flex items-center gap-2 text-[10px] font-bold">
-                    <div class="flex items-center gap-1" :class="syncStatus === '已同步' ? 'text-green-500' : 'text-amber-500'">
-                        <div class="w-2 h-2 rounded-full" :class="syncStatus === '已同步' ? 'bg-green-500' : 'bg-amber-500 animate-pulse'"></div>
-                        {{ syncStatus }}
-                    </div>
-                    <span class="text-gray-300">|</span>
-                    <a :href="getTranslateLink()" target="_blank" class="text-lake hover:underline"><i class="fas fa-language mr-1"></i>翻譯助手</a>
+                <h1 class="text-xl font-bold text-lake tracking-wide"><i class="fas fa-cloud mr-2"></i>Kyushu Cloud</h1>
+                <div class="flex items-center gap-1 text-[10px] font-bold transition-colors" :class="syncStatus === '已同步' ? 'text-green-500' : 'text-amber-500'">
+                    <div class="w-2 h-2 rounded-full" :class="syncStatus === '已同步' ? 'bg-green-500' : 'bg-amber-500 animate-pulse'"></div>
+                    {{ syncStatus }}
                 </div>
             </div>
             <div class="flex gap-3">
@@ -112,11 +74,12 @@
 
                 <div class="flex justify-between items-end mb-4 px-2">
                     <div>
-                        <div class="text-xs text-gray-400 mb-1">今日重點區域</div>
+                        <div class="text-xs text-gray-400 mb-1">今日重點區域 (點擊編輯)</div>
                         <div class="flex items-center gap-2">
                              <input v-model="currentDay.location" class="text-2xl font-bold text-gray-800 bg-transparent border-b border-transparent focus:border-lake focus:outline-none w-40" @change="fetchWeather">
                              <i class="fas fa-pen text-xs text-gray-300"></i>
                         </div>
+                        <div class="text-xs text-gray-400 mt-1">住宿: <span @click="editHotel" class="text-gray-600 underline decoration-dotted cursor-pointer">{{ currentDay.hotel || '未設定' }}</span></div>
                     </div>
                     <div class="text-right">
                         <div class="flex items-center gap-2 text-lake">
@@ -148,10 +111,10 @@
         </div>
 
         <div v-show="currentTab === 'money'" class="px-5 pt-6 pb-24">
-            <h2 class="text-2xl font-bold text-lake mb-4">智慧分帳 ({{ meta.currency }})</h2>
+            <h2 class="text-2xl font-bold text-lake mb-4">匯率分帳</h2>
             <div class="bg-white p-4 rounded-2xl shadow-soft mb-6 flex justify-between items-center">
                 <div>
-                    <div class="text-xs text-gray-400">即時匯率 (1 {{ meta.currency }} = TWD)</div>
+                    <div class="text-xs text-gray-400">目前匯率 (1 JPY = ? TWD)</div>
                     <div class="flex items-center gap-2 mt-1">
                         <span class="text-lg font-bold text-gray-700"></span>
                         <input v-model.number="exchangeRateDecimal" class="w-16 font-bold text-lg border-b border-lake text-lake focus:outline-none text-center" type="number">
@@ -161,10 +124,10 @@
             </div>
             <div class="bg-white p-5 rounded-3xl shadow-float mb-6 relative z-10 border border-gray-100">
                 <div class="grid grid-cols-2 gap-3 mb-3">
-                    <div><label class="text-xs text-gray-400 pl-1">金額 ({{ meta.currency }})</label><input v-model.number="newExpense.amount" type="number" :placeholder="meta.symbol" class="w-full bg-gray-50 p-3 rounded-xl font-bold text-lg focus:ring-2 focus:ring-lake/30 outline-none"></div>
-                    <div><label class="text-xs text-gray-400 pl-1">約台幣 (TWD)</label><div class="w-full bg-gray-50 p-3 rounded-xl font-bold text-lg text-gray-500">${{ Math.round((newExpense.amount || 0) * (exchangeRateDecimal || 0.22)) }}</div></div>
+                    <div><label class="text-xs text-gray-400 pl-1">金額 (JPY)</label><input v-model.number="newExpense.amountJpy" type="number" placeholder="¥" class="w-full bg-gray-50 p-3 rounded-xl font-bold text-lg focus:ring-2 focus:ring-lake/30 outline-none"></div>
+                    <div><label class="text-xs text-gray-400 pl-1">約台幣 (TWD)</label><div class="w-full bg-gray-50 p-3 rounded-xl font-bold text-lg text-gray-500">${{ Math.round((newExpense.amountJpy || 0) * (exchangeRateDecimal ? (exchangeRateDecimal/1000000 < 1 ? exchangeRateDecimal : 0.22) : 0.22)) }}</div></div>
                 </div>
-                <input v-model="newExpense.desc" placeholder="消費項目" class="w-full bg-gray-50 p-3 rounded-xl text-sm mb-3 focus:ring-2 focus:ring-lake/30 outline-none">
+                <input v-model="newExpense.desc" placeholder="消費項目 (例: 拉麵)" class="w-full bg-gray-50 p-3 rounded-xl text-sm mb-3 focus:ring-2 focus:ring-lake/30 outline-none">
                 <div class="flex gap-2">
                     <select v-model="newExpense.payer" class="bg-gray-50 p-3 rounded-xl text-sm flex-1 outline-none"><option value="我">我先付</option><option value="旅伴A">旅伴A先付</option><option value="旅伴B">旅伴B先付</option></select>
                     <button @click="addExpense" class="bg-lake text-white px-6 rounded-xl font-bold shadow-lg shadow-lake/30 active:scale-95 transition">新增</button>
@@ -172,11 +135,11 @@
             </div>
             <div class="space-y-3">
                 <div v-for="(exp, idx) in expenses" :key="idx" class="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center group">
-                    <div><div class="font-bold text-gray-800">{{ exp.desc }}</div><div class="text-xs text-gray-400">{{ exp.payer }} • <span class="text-lake">{{ meta.symbol }}{{ exp.amount }}</span></div></div>
-                    <div class="text-right"><div class="font-bold text-gray-600">NT$ {{ Math.round(exp.amount * exp.rate) }}</div><button @click="removeExpense(idx)" class="text-red-300 text-xs opacity-0 group-hover:opacity-100 transition px-2 py-1">刪除</button></div>
+                    <div><div class="font-bold text-gray-800">{{ exp.desc }}</div><div class="text-xs text-gray-400">{{ exp.payer }} • <span class="text-lake">¥{{ exp.amountJpy }}</span></div></div>
+                    <div class="text-right"><div class="font-bold text-gray-600">NT$ {{ Math.round(exp.amountJpy * exp.rate) }}</div><button @click="removeExpense(idx)" class="text-red-300 text-xs opacity-0 group-hover:opacity-100 transition px-2 py-1">刪除</button></div>
                 </div>
             </div>
-             <div v-if="expenses.length > 0" class="fixed bottom-24 left-5 right-5 bg-gray-800 text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center z-20">
+            <div v-if="expenses.length > 0" class="fixed bottom-24 left-5 right-5 bg-gray-800 text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center z-20">
                 <div><div class="text-xs text-gray-400">總支出 (TWD)</div><div class="font-bold text-xl">NT$ {{ totalTwd.toLocaleString() }}</div></div>
                 <div class="text-right"><div class="text-xs text-gray-400">每人 ({{ peopleCount }}人)</div><div class="font-bold text-xl text-lake">NT$ {{ Math.round(totalTwd / peopleCount).toLocaleString() }}</div></div>
             </div>
@@ -211,7 +174,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref as dbRef, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // 🔴 請填入 Firebase Config 🔴
+    // 🔴🔴🔴 請在這裡填入你的 Firebase 設定 (從 Firebase Console 複製) 🔴🔴🔴
     const firebaseConfig = {
         apiKey: "AIzaSyBEd-QerihjgjLqHR46DTh-HZ3LEgjV7b4",
         authDomain: "kyushu-trip-21392.firebaseapp.com",
@@ -222,170 +185,113 @@
         appId: "1:1073394061780:web:bc17f72b576a77094b0641"
     };
 
-    // Initialize Firebase (Error Handling)
-    let app, db, dbTripRef;
-    try {
-        app = initializeApp(firebaseConfig);
-        db = getDatabase(app);
-        const tripId = "shared_trip_v5_public"; 
-        dbTripRef = dbRef(db, 'trips/' + tripId);
-    } catch (e) {
-        console.error("Firebase 初始化失敗，請檢查 Config", e);
-    }
-
-    // 🌍 WORLD DATABASE (智慧偵測邏輯)
-    const worldDB = {
-        'default': { curr: 'USD', sym: '$', lang: 'en', lat: 40.71, lon: -74.00 },
-        'tokyo': { curr: 'JPY', sym: '¥', lang: 'ja', lat: 35.68, lon: 139.76 },
-        'osaka': { curr: 'JPY', sym: '¥', lang: 'ja', lat: 34.69, lon: 135.50 },
-        'kyoto': { curr: 'JPY', sym: '¥', lang: 'ja', lat: 35.01, lon: 135.76 },
-        'fukuoka': { curr: 'JPY', sym: '¥', lang: 'ja', lat: 33.59, lon: 130.40 },
-        'london': { curr: 'GBP', sym: '£', lang: 'en', lat: 51.50, lon: -0.12 },
-        'seoul': { curr: 'KRW', sym: '₩', lang: 'ko', lat: 37.56, lon: 126.97 },
-        'bangkok': { curr: 'THB', sym: '฿', lang: 'th', lat: 13.75, lon: 100.50 },
-        'paris': { curr: 'EUR', sym: '€', lang: 'fr', lat: 48.85, lon: 2.35 },
-        'taipei': { curr: 'TWD', sym: '$', lang: 'zh-TW', lat: 25.03, lon: 121.56 },
-        'hong kong': { curr: 'HKD', sym: '$', lang: 'zh-HK', lat: 22.31, lon: 114.16 }
-    };
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    // 定義資料庫路徑 (這就是所有朋友共享的房間 ID)
+    const tripId = "shared_kyushu_trip_v1"; 
+    const dbTripRef = dbRef(db, 'trips/' + tripId);
 
     createApp({
         setup() {
-            // UI State
-            const showWizard = ref(true);
             const currentTab = ref('itinerary');
             const selectedDayIdx = ref(0);
             const syncStatus = ref('連線中...');
-            const mapLoading = ref(false);
-            const loadingError = ref('');
             
             // Map
             let map = null;
             let markers = [];
             let userMarker = null;
+            const mapLoading = ref(false);
 
-            // Data Models
-            const setupData = ref({ destination: '', startDate: '' });
-            const meta = ref({ destination: '', currency: 'JPY', symbol: '¥', lang: 'ja' }); 
-            const itinerary = ref([]);
+            // Data
+            const itinerary = ref([]); // 初始為空，等待 Firebase 載入
             const expenses = ref([]);
-            const checklist = ref([{text: '護照', checked: false}, {text: '網卡', checked: false}]);
+            const checklist = ref([]);
             
-            // Currency & Money
-            const exchangeRateDecimal = ref(1); 
+            // Currency & UI
+            const exchangeRateDecimal = ref(0.22); 
             const rateLoading = ref(false);
             const peopleCount = ref(2);
-            const newExpense = ref({ amount: '', desc: '', payer: '我' });
-            
-            // Weather
+            const newExpense = ref({ amountJpy: '', desc: '', payer: '我' });
+            const newItem = ref('');
             const currentWeather = ref({ temp: '--', code: 0 });
-
-            // Computed
-            const currentDay = computed(() => itinerary.value[selectedDayIdx.value] || { location: '...', events: [] });
-            const totalTwd = computed(() => expenses.value.reduce((sum, item) => sum + Math.round(item.amount * item.rate), 0));
-
-            // --- WIZARD LOGIC ---
-            const detectContext = (city) => {
-                const key = city.toLowerCase().trim();
-                const match = Object.keys(worldDB).find(k => key.includes(k));
-                return worldDB[match] || worldDB['default'];
+            
+            // 預設資料 (如果是第一次建立，會用這個覆蓋雲端)
+            const defaultData = {
+                itinerary: [
+                    { location: '福岡', events: [{ time: '10:00', title: '福岡機場', desc: '抵達', lat: 33.5859, lon: 130.4507 }] }
+                ],
+                expenses: [],
+                checklist: [{ text: '護照', checked: false }],
+                exchangeRateDecimal: 0.22
             };
 
-            const initializeTrip = () => {
-                const context = detectContext(setupData.value.destination);
-                
-                meta.value = {
-                    destination: setupData.value.destination,
-                    currency: context.curr,
-                    symbol: context.sym,
-                    lang: context.lang
-                };
+            const currentDay = computed(() => itinerary.value[selectedDayIdx.value] || { location: '載入中...', events: [] });
+            const totalTwd = computed(() => expenses.value.reduce((sum, item) => sum + Math.round(item.amountJpy * item.rate), 0));
 
-                itinerary.value = [{
-                    location: setupData.value.destination,
-                    hotel: '',
-                    events: [{ 
-                        time: '10:00', 
-                        title: '抵達 ' + setupData.value.destination, 
-                        desc: '旅程開始！', 
-                        lat: context.lat, 
-                        lon: context.lon 
-                    }]
-                }];
-                
-                showWizard.value = false;
-                saveToCloud();
-                
-                // 🔴 安全修正：確保 DOM 更新後才初始化地圖
-                nextTick(() => {
-                    setTimeout(() => {
-                        updateRate();
-                        initMap(); // 這時候 map-container 一定存在了
-                        fetchWeather();
-                    }, 100);
-                });
-            };
+            // --- FIREBASE SYNC LOGIC ---
+            let isRemoteUpdate = false; // 避免無限迴圈鎖
 
-            // --- SYNC ---
-            let isRemoteUpdate = false;
             const initSync = () => {
-                if(!dbTripRef) {
-                    loadingError.value = "Firebase 設定未填寫或錯誤";
-                    return;
-                }
-
                 onValue(dbTripRef, (snapshot) => {
                     const data = snapshot.val();
-                    isRemoteUpdate = true;
-                    if (data && data.meta) {
-                        showWizard.value = false;
-                        meta.value = data.meta;
+                    isRemoteUpdate = true; // 標記為遠端更新，不觸發 Watch
+                    
+                    if (data) {
                         itinerary.value = data.itinerary || [];
                         expenses.value = data.expenses || [];
                         checklist.value = data.checklist || [];
-                        exchangeRateDecimal.value = data.exchangeRateDecimal || 1;
+                        exchangeRateDecimal.value = data.exchangeRateDecimal || 0.22;
                         syncStatus.value = '已同步';
-                        
-                        // 🔴 安全修正：檢查地圖容器是否存在
-                        nextTick(() => {
-                            if(currentTab.value === 'itinerary' && !showWizard.value) {
-                                if(!map) initMap(); else updateMarkers();
-                            }
-                            isRemoteUpdate = false;
-                        });
                     } else {
-                        showWizard.value = true;
-                        syncStatus.value = '等待設定';
+                        // 資料庫是空的，推入預設資料
+                        itinerary.value = defaultData.itinerary;
+                        expenses.value = defaultData.expenses;
+                        checklist.value = defaultData.checklist;
+                        saveToCloud(); 
                     }
-                }, (err) => {
-                    console.error(err);
+                    
+                    // 下個 Tick 重置地圖與標記
+                    nextTick(() => { 
+                        if(currentTab.value === 'itinerary') {
+                            if(!map) initMap();
+                            else updateMarkers();
+                        }
+                        isRemoteUpdate = false; 
+                    });
+                }, (error) => {
                     syncStatus.value = '連線失敗';
-                    loadingError.value = "連線失敗: 請檢查 Firebase Config";
+                    console.error(error);
+                    alert("連線失敗：請檢查 Firebase 是否開啟測試模式 (Test Mode)");
                 });
             };
 
             const saveToCloud = () => {
-                if (isRemoteUpdate || showWizard.value || !dbTripRef) return; 
+                if (isRemoteUpdate) return; // 如果是遠端來的資料，不要回寫
                 syncStatus.value = '儲存中...';
                 set(dbTripRef, {
-                    meta: meta.value,
                     itinerary: itinerary.value,
                     expenses: expenses.value,
                     checklist: checklist.value,
                     exchangeRateDecimal: exchangeRateDecimal.value
-                }).then(() => syncStatus.value = '已同步').catch(()=> syncStatus.value = '儲存失敗');
+                }).then(() => {
+                    syncStatus.value = '已同步';
+                }).catch(e => {
+                    syncStatus.value = '儲存錯誤';
+                });
             };
 
-            watch([itinerary, expenses, checklist, exchangeRateDecimal, meta], () => saveToCloud(), { deep: true });
+            // Watch for any changes
+            watch([itinerary, expenses, checklist, exchangeRateDecimal], () => {
+                saveToCloud();
+            }, { deep: true });
 
-            // --- FEATURES ---
+            // --- METHODS (保留 V3.1 功能) ---
             const initMap = () => {
-                // 🔴 安全修正：如果地圖容器不存在，直接跳過，防止報錯
-                if(!document.getElementById('map-container')) return;
                 if(map) return;
-                
-                const firstLoc = itinerary.value[0]?.events?.find(e=>e.lat) || {lat: 35.68, lon: 139.76};
-                map = L.map('map-container', { zoomControl: false }).setView([firstLoc.lat, firstLoc.lon], 13);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: 'OSM', maxZoom: 19 }).addTo(map);
+                map = L.map('map-container', { zoomControl: false }).setView([33.5902, 130.4017], 13);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OSM', maxZoom: 19 }).addTo(map);
                 updateMarkers();
             };
 
@@ -404,53 +310,56 @@
                 map.fitBounds(bounds, { padding: [50, 50] });
             };
 
+            const focusOnMap = (event) => {
+                if(map && event.lat && event.lon) {
+                    map.flyTo([event.lat, event.lon], 16);
+                    const target = markers.find(m => m.getLatLng().lat === event.lat && m.getLatLng().lng === event.lon);
+                    if(target) target.openPopup();
+                }
+            };
+            
+            const locateMe = () => {
+                if (!navigator.geolocation) return alert("不支援定位");
+                mapLoading.value = true;
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    if(userMarker) map.removeLayer(userMarker);
+                    userMarker = L.marker([latitude, longitude]).addTo(map).bindPopup("你在這裡").openPopup();
+                    map.flyTo([latitude, longitude], 15);
+                    mapLoading.value = false;
+                });
+            };
+
+            const addDay = () => itinerary.value.push({ location: '新地點', hotel: '', events: [] });
+            const addEvent = () => currentDay.value.events.push({ time: '12:00', title: '新行程', desc: '編輯我', lat: null, lon: null });
+            const editEvent = (idx) => {
+                const ev = currentDay.value.events[idx];
+                const t = prompt("時間", ev.time); if(t!==null) ev.time = t;
+                const title = prompt("標題", ev.title); if(title!==null) ev.title = title;
+                const d = prompt("說明", ev.desc); if(d!==null) ev.desc = d;
+            };
+            const deleteEvent = (idx) => { if(confirm('刪除?')) currentDay.value.events.splice(idx, 1); updateMarkers(); };
+            const editHotel = () => { const h = prompt('住宿', currentDay.value.hotel); if(h!==null) currentDay.value.hotel = h; };
+
             const updateRate = async () => {
                 rateLoading.value = true;
                 try {
-                    const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${meta.value.currency}`);
+                    const res = await fetch('https://api.exchangerate-api.com/v4/latest/JPY');
                     const data = await res.json();
                     if(data.rates?.TWD) exchangeRateDecimal.value = data.rates.TWD;
-                } catch(e) { console.error(e); } finally { rateLoading.value = false; }
+                } catch(e) { alert("匯率更新失敗"); } finally { rateLoading.value = false; }
             };
 
-            const getTranslateLink = () => `https://translate.google.com/?sl=${meta.value.lang}&tl=zh-TW&op=translate`;
-
-            const addDay = () => itinerary.value.push({ location: 'New Place', events: [] });
-            const addEvent = () => currentDay.value.events.push({ time: '12:00', title: 'New Event', desc: '...', lat: null, lon: null });
-            const editEvent = (idx) => {
-                const ev = currentDay.value.events[idx];
-                const t = prompt("Time", ev.time); if(t) ev.time = t;
-                const title = prompt("Title", ev.title); if(title) ev.title = title;
-                const d = prompt("Desc", ev.desc); if(d) ev.desc = d;
-            };
-            const deleteEvent = (idx) => confirm('Delete?') && currentDay.value.events.splice(idx, 1);
             const addExpense = () => {
-                if(newExpense.value.amount) {
-                    expenses.value.unshift({ 
-                        amount: newExpense.value.amount, 
-                        desc: newExpense.value.desc || 'General', 
-                        payer: newExpense.value.payer, 
-                        rate: exchangeRateDecimal.value 
-                    });
-                    newExpense.value.amount = ''; newExpense.value.desc = '';
+                if(newExpense.value.amountJpy) {
+                    expenses.value.unshift({ amountJpy: newExpense.value.amountJpy, desc: newExpense.value.desc || '未分類', payer: newExpense.value.payer, rate: exchangeRateDecimal.value });
+                    newExpense.value.amountJpy = ''; newExpense.value.desc = '';
                 }
             };
-            const removeExpense = (i) => expenses.value.splice(i, 1);
+            const removeExpense = (idx) => expenses.value.splice(idx, 1);
             const addChecklist = () => { if(newItem.value) { checklist.value.push({text:newItem.value, checked:false}); newItem.value=''; }};
             const removeChecklist = (i) => checklist.value.splice(i, 1);
-            
-            const switchTab = (tab) => { 
-                currentTab.value = tab; 
-                if(tab === 'itinerary') {
-                    // 🔴 安全修正：切換 Tab 時也要檢查 DOM 狀態
-                    nextTick(() => { 
-                        if(document.getElementById('map-container')) {
-                            if(map) map.invalidateSize(); else initMap(); 
-                        }
-                    }); 
-                }
-            };
-            
+            const switchTab = (tab) => { currentTab.value = tab; if(tab === 'itinerary') nextTick(() => { if(map) map.invalidateSize(); else initMap(); }); };
             const selectDay = (idx) => { selectedDayIdx.value = idx; updateMarkers(); fetchWeather(); };
             const fetchWeather = async () => {
                 const ev = currentDay.value.events?.find(e => e.lat);
@@ -463,18 +372,17 @@
                 }
             };
             const getWeatherIcon = (code) => code <= 3 ? 'fas fa-sun' : code <= 50 ? 'fas fa-cloud' : 'fas fa-umbrella';
-            const focusOnMap = (event) => { if(map && event.lat) { map.flyTo([event.lat, event.lon], 16); }};
-            const locateMe = () => { navigator.geolocation.getCurrentPosition(p => { if(map) map.flyTo([p.coords.latitude, p.coords.longitude], 15); }) };
             const printManual = () => window.print();
 
             onMounted(() => {
-                initSync();
+                initSync(); // Start Firebase Sync
+                updateRate();
+                fetchWeather();
             });
 
             return {
-                showWizard, setupData, meta, initializeTrip, loadingError,
                 currentTab, selectedDayIdx, currentDay, itinerary, expenses, checklist, newItem, exchangeRateDecimal, newExpense, totalTwd, peopleCount, rateLoading, currentWeather, mapLoading, syncStatus,
-                switchTab, selectDay, locateMe, updateRate, addExpense, removeExpense, addChecklist, removeChecklist, printManual, focusOnMap, getWeatherIcon, addDay, addEvent, editEvent, deleteEvent, getTranslateLink
+                switchTab, selectDay, locateMe, updateRate, addExpense, removeExpense, addChecklist, removeChecklist, printManual, focusOnMap, getWeatherIcon, addDay, addEvent, editEvent, deleteEvent, editHotel
             };
         }
     }).mount('#app');
