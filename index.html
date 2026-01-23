@@ -331,7 +331,23 @@
             };
 
             const addDay = () => itinerary.value.push({ location: '新地點', hotel: '', events: [] });
-            const addEvent = () => currentDay.value.events.push({ time: '12:00', title: '新行程', desc: '編輯我', lat: null, lon: null });
+            
+            // --- 🛑 重點修改位置：修復 addEvent 函式 ---
+            const addEvent = () => {
+                // 直接取得原始陣列中的 Day 物件
+                const day = itinerary.value[selectedDayIdx.value];
+                if (day) {
+                    // Firebase 不會儲存空陣列，讀回時 events 可能是 undefined
+                    // 這裡先檢查，如果不存在就初始化為空陣列
+                    if (!Array.isArray(day.events)) {
+                        day.events = [];
+                    }
+                    // 安全地執行 push
+                    day.events.push({ time: '12:00', title: '新行程', desc: '編輯我', lat: null, lon: null });
+                }
+            };
+            // ------------------------------------------
+
             const editEvent = (idx) => {
                 const ev = currentDay.value.events[idx];
                 const t = prompt("時間", ev.time); if(t!==null) ev.time = t;
