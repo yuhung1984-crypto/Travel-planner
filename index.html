@@ -29,6 +29,7 @@
         #map-container { height: 280px; width: 100%; border-radius: 1.5rem; overflow: hidden; z-index: 0; box-shadow: inset 0 0 20px rgba(0,0,0,0.1); }
         .leaflet-popup-content-wrapper { border-radius: 12px; font-family: 'Zen Maru Gothic'; }
         .leaflet-popup-content { font-size: 14px; font-weight: bold; color: #4E9F9F; margin: 12px; }
+        .nav-link { color: #3A7A7A; text-decoration: underline; cursor: pointer; display: block; margin-top: 5px; }
         @media print {
             .app-container { max-width: 100%; padding-bottom: 0; }
             .no-print, #map-container, nav { display: none !important; }
@@ -84,7 +85,7 @@
                     <div class="text-right">
                         <div class="flex items-center gap-2 text-lake">
                             <i :class="getWeatherIcon(currentWeather.code)" class="text-xl"></i>
-                            <span class="text-xl font-bold">{{ currentWeather.temp }}°C</span>
+                            <span class="text-xl font-bold">{{ currentWeather.temp }}<span v-if="currentWeather.temp !== '--'">°C</span></span>
                         </div>
                     </div>
                 </div>
@@ -174,7 +175,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref as dbRef, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // 🔴🔴🔴 請在這裡填入你的 Firebase 設定 (從 Firebase Console 複製) 🔴🔴🔴
     const firebaseConfig = {
         apiKey: "AIzaSyBEd-QerihjgjLqHR46DTh-HZ3LEgjV7b4",
         authDomain: "kyushu-trip-21392.firebaseapp.com",
@@ -185,10 +185,8 @@
         appId: "1:1073394061780:web:bc17f72b576a77094b0641"
     };
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    // 定義資料庫路徑 (這就是所有朋友共享的房間 ID)
     const tripId = "shared_kyushu_trip_v1"; 
     const dbTripRef = dbRef(db, 'trips/' + tripId);
 
@@ -198,18 +196,15 @@
             const selectedDayIdx = ref(0);
             const syncStatus = ref('連線中...');
             
-            // Map
             let map = null;
             let markers = [];
             let userMarker = null;
             const mapLoading = ref(false);
 
-            // Data
-            const itinerary = ref([]); // 初始為空，等待 Firebase 載入
+            const itinerary = ref([]);
             const expenses = ref([]);
             const checklist = ref([]);
             
-            // Currency & UI
             const exchangeRateDecimal = ref(0.22); 
             const rateLoading = ref(false);
             const peopleCount = ref(2);
@@ -217,7 +212,6 @@
             const newItem = ref('');
             const currentWeather = ref({ temp: '--', code: 0 });
             
-            // 預設資料 (如果是第一次建立，會用這個覆蓋雲端)
             const defaultData = {
                 itinerary: [
                     { location: '福岡', events: [{ time: '10:00', title: '福岡機場', desc: '抵達', lat: 33.5859, lon: 130.4507 }] }
@@ -230,13 +224,12 @@
             const currentDay = computed(() => itinerary.value[selectedDayIdx.value] || { location: '載入中...', events: [] });
             const totalTwd = computed(() => expenses.value.reduce((sum, item) => sum + Math.round(item.amountJpy * item.rate), 0));
 
-            // --- FIREBASE SYNC LOGIC ---
-            let isRemoteUpdate = false; // 避免無限迴圈鎖
+            let isRemoteUpdate = false;
 
             const initSync = () => {
                 onValue(dbTripRef, (snapshot) => {
                     const data = snapshot.val();
-                    isRemoteUpdate = true; // 標記為遠端更新，不觸發 Watch
+                    isRemoteUpdate = true;
                     
                     if (data) {
                         itinerary.value = data.itinerary || [];
@@ -245,14 +238,12 @@
                         exchangeRateDecimal.value = data.exchangeRateDecimal || 0.22;
                         syncStatus.value = '已同步';
                     } else {
-                        // 資料庫是空的，推入預設資料
                         itinerary.value = defaultData.itinerary;
                         expenses.value = defaultData.expenses;
                         checklist.value = defaultData.checklist;
                         saveToCloud(); 
                     }
                     
-                    // 下個 Tick 重置地圖與標記
                     nextTick(() => { 
                         if(currentTab.value === 'itinerary') {
                             if(!map) initMap();
@@ -263,12 +254,11 @@
                 }, (error) => {
                     syncStatus.value = '連線失敗';
                     console.error(error);
-                    alert("連線失敗：請檢查 Firebase 是否開啟測試模式 (Test Mode)");
                 });
             };
 
             const saveToCloud = () => {
-                if (isRemoteUpdate) return; // 如果是遠端來的資料，不要回寫
+                if (isRemoteUpdate) return;
                 syncStatus.value = '儲存中...';
                 set(dbTripRef, {
                     itinerary: itinerary.value,
@@ -282,12 +272,10 @@
                 });
             };
 
-            // Watch for any changes
             watch([itinerary, expenses, checklist, exchangeRateDecimal], () => {
                 saveToCloud();
             }, { deep: true });
 
-            // --- METHODS (保留 V3.1 功能) ---
             const initMap = () => {
                 if(map) return;
                 map = L.map('map-container', { zoomControl: false }).setView([33.5902, 130.4017], 13);
@@ -295,6 +283,7 @@
                 updateMarkers();
             };
 
+            // --- 🛑 位置 3：地圖標記優化，加入導航連結 ---
             const updateMarkers = () => {
                 if(!map) return;
                 markers.forEach(m => map.removeLayer(m));
@@ -303,18 +292,31 @@
                 if(events.length === 0) return;
                 const bounds = L.latLngBounds();
                 events.forEach(e => {
-                    const marker = L.marker([e.lat, e.lon]).addTo(map).bindPopup(`<b>${e.title}</b><br>${e.desc}`);
+                    // 彈出視窗增加 Google Maps 導航連結
+                    const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${e.lat},${e.lon}`;
+                    const popupContent = `
+                        <b>${e.title}</b><br>${e.desc}
+                        <a href="${navUrl}" target="_blank" class="nav-link"><i class="fas fa-location-arrow"></i> 導航去這裡</a>
+                    `;
+                    const marker = L.marker([e.lat, e.lon]).addTo(map).bindPopup(popupContent);
                     markers.push(marker);
                     bounds.extend([e.lat, e.lon]);
                 });
                 map.fitBounds(bounds, { padding: [50, 50] });
             };
 
+            // --- 🛑 位置 2：點擊卡片跳轉導航 ---
             const focusOnMap = (event) => {
                 if(map && event.lat && event.lon) {
                     map.flyTo([event.lat, event.lon], 16);
                     const target = markers.find(m => m.getLatLng().lat === event.lat && m.getLatLng().lng === event.lon);
-                    if(target) target.openPopup();
+                    if(target) {
+                        target.openPopup();
+                        // 詢問是否要導航
+                        if(confirm(`要開啟 ${event.title} 的導航嗎？`)) {
+                            window.open(`https://www.google.com/maps/dir/?api=1&destination=${event.lat},${event.lon}`, '_blank');
+                        }
+                    }
                 }
             };
             
@@ -330,30 +332,60 @@
                 });
             };
 
-            const addDay = () => itinerary.value.push({ location: '新地點', hotel: '', events: [] });
+            const addDay = () => {
+                itinerary.value.push({ location: '新地點', hotel: '', events: [] });
+                selectedDayIdx.value = itinerary.value.length - 1;
+                fetchWeather(); 
+            };
             
-            // --- 🛑 重點修改位置：修復 addEvent 函式 ---
             const addEvent = () => {
-                // 直接取得原始陣列中的 Day 物件
                 const day = itinerary.value[selectedDayIdx.value];
                 if (day) {
-                    // Firebase 不會儲存空陣列，讀回時 events 可能是 undefined
-                    // 這裡先檢查，如果不存在就初始化為空陣列
                     if (!Array.isArray(day.events)) {
                         day.events = [];
                     }
-                    // 安全地執行 push
                     day.events.push({ time: '12:00', title: '新行程', desc: '編輯我', lat: null, lon: null });
                 }
             };
-            // ------------------------------------------
 
-            const editEvent = (idx) => {
+            // --- 🛑 位置 1：移除手動座標，改為自動搜尋 ---
+            const editEvent = async (idx) => {
                 const ev = currentDay.value.events[idx];
                 const t = prompt("時間", ev.time); if(t!==null) ev.time = t;
-                const title = prompt("標題", ev.title); if(title!==null) ev.title = title;
+                const title = prompt("標題 (輸入地點名稱會自動搜尋座標)", ev.title); 
+                
+                if(title!==null) {
+                    // 如果標題改變了，嘗試自動搜尋座標
+                    if (title !== ev.title) {
+                        ev.title = title;
+                        mapLoading.value = true;
+                        try {
+                            // 使用 OpenStreetMap Nominatim API 搜尋地點
+                            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(title)}`);
+                            const data = await res.json();
+                            if (data && data.length > 0) {
+                                ev.lat = parseFloat(data[0].lat);
+                                ev.lon = parseFloat(data[0].lon);
+                                alert(`已自動定位到：${title}`);
+                                updateMarkers();
+                                fetchWeather();
+                            } else {
+                                alert(`找不到 "${title}" 的位置，請嘗試更精確的名稱 (例: 九州 福岡塔)`);
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            alert("地點搜尋失敗");
+                        } finally {
+                            mapLoading.value = false;
+                        }
+                    } else {
+                        ev.title = title; // 標題沒變，單純確認
+                    }
+                }
+                
                 const d = prompt("說明", ev.desc); if(d!==null) ev.desc = d;
             };
+
             const deleteEvent = (idx) => { if(confirm('刪除?')) currentDay.value.events.splice(idx, 1); updateMarkers(); };
             const editHotel = () => { const h = prompt('住宿', currentDay.value.hotel); if(h!==null) currentDay.value.hotel = h; };
 
@@ -377,6 +409,7 @@
             const removeChecklist = (i) => checklist.value.splice(i, 1);
             const switchTab = (tab) => { currentTab.value = tab; if(tab === 'itinerary') nextTick(() => { if(map) map.invalidateSize(); else initMap(); }); };
             const selectDay = (idx) => { selectedDayIdx.value = idx; updateMarkers(); fetchWeather(); };
+            
             const fetchWeather = async () => {
                 const ev = currentDay.value.events?.find(e => e.lat);
                 if(ev) {
@@ -385,13 +418,20 @@
                         const data = await res.json();
                         currentWeather.value = { temp: Math.round(data.current_weather.temperature), code: data.current_weather.weathercode };
                     } catch(e) {}
+                } else {
+                    currentWeather.value = { temp: '--', code: 999 };
                 }
             };
-            const getWeatherIcon = (code) => code <= 3 ? 'fas fa-sun' : code <= 50 ? 'fas fa-cloud' : 'fas fa-umbrella';
+            
+            const getWeatherIcon = (code) => {
+                if (code === 999) return 'fas fa-umbrella';
+                return code <= 3 ? 'fas fa-sun' : code <= 50 ? 'fas fa-cloud' : 'fas fa-umbrella';
+            };
+            
             const printManual = () => window.print();
 
             onMounted(() => {
-                initSync(); // Start Firebase Sync
+                initSync(); 
                 updateRate();
                 fetchWeather();
             });
